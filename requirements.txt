@@ -4,3 +4,4 @@ mysql-connector-python
 opencv-contrib-python
 numpy
 flask-cors
+python-dotenv
