@@ -1,0 +1,177 @@
+{% extends "layout.html" %}
+
+{% block content %}
+<div class="header animate-fade">
+    <div>
+        <h1 style="color: var(--primary);">Student Management</h1>
+        <p style="color: var(--text-muted);">Enroll new students and manage existing records.</p>
+    </div>
+</div>
+
+<div style="display: grid; grid-template-columns: 1fr 1fr; gap: 2rem; margin-top: 2rem;" class="animate-fade">
+    <!-- Enrollment Form -->
+    <div class="stat-card" style="text-align: left; padding: 2rem;">
+        <h3 style="margin-bottom: 2rem; font-weight: 600;"><i class="fas fa-user-plus"></i> New Enrollment</h3>
+        <div class="form-group">
+            <label>Full Name</label>
+            <input type="text" id="reg-name" class="form-control" placeholder="Enter student name">
+        </div>
+        <div class="form-group">
+            <label>Roll Number / ID</label>
+            <input type="text" id="reg-roll" class="form-control" placeholder="e.g. 2023-CS-101 or EMP-001">
+        </div>
+        <div class="form-group">
+            <label>Course/Batch</label>
+            <input type="text" id="reg-course" class="form-control" placeholder="e.g. BCA III Year">
+        </div>
+        <div class="form-group">
+            <label>Email Address</label>
+            <input type="email" id="reg-email" class="form-control" placeholder="student@example.com">
+        </div>
+        <div class="form-group">
+            <label>Category (Role)</label>
+            <select id="reg-role" class="form-control">
+                <option value="Student">Student (Attendance Only)</option>
+                <option value="Faculty">Faculty/Staff (Login Access)</option>
+            </select>
+        </div>
+        <div class="form-group" id="password-group" style="display: none;">
+            <label>Login Password</label>
+            <input type="password" id="reg-password" class="form-control" placeholder="Create login password">
+            <small style="color: var(--text-muted);">This allows the faculty member to log in to the system.</small>
+        </div>
+    </div>
+
+    <!-- Face Capture -->
+    <div class="stat-card">
+        <h3 style="margin-bottom: 2rem; font-weight: 600;"><i class="fas fa-camera"></i> Face Capture</h3>
+
+        <!-- Camera Placeholder -->
+        <div id="camera-placeholder"
+            style="width: 100%; height: 250px; background: #f1f5f9; border: 2px dashed var(--border); border-radius: 15px; display: flex; flex-direction: column; align-items: center; justify-content: center; color: var(--text-muted);">
+            <i class="fas fa-video-slash" style="font-size: 2.5rem; margin-bottom: 1rem;"></i>
+            <p style="font-size: 0.9rem;">Camera is currently offline</p>
+            <button id="open-camera-btn" class="btn-auth"
+                style="margin-top: 1rem; width: auto; padding: 0.6rem 1.5rem;">
+                <i class="fas fa-play"></i> Initialize Camera
+            </button>
+        </div>
+
+        <div id="capture-container"
+            style="width: 100%; position: relative; border-radius: 15px; overflow: hidden; background: #000; display: none;">
+            <video id="video-reg" autoplay muted style="width: 100%; display: block;"></video>
+            <canvas id="canvas-reg" style="display: none;"></canvas>
+            <img id="photo-preview" style="display: none; width: 100%;">
+        </div>
+
+        <div id="capture-controls" style="margin-top: 1.5rem; display: none; gap: 1rem; width: 100%;">
+            <button id="capture-btn" class="btn-auth" style="flex: 1;">
+                <i class="fas fa-save"></i> Capture & Save
+            </button>
+            <button id="retake-btn" class="btn-auth" style="flex: 1; background: var(--secondary); display: none;">
+                <i class="fas fa-sync"></i> Retake
+            </button>
+        </div>
+        <div id="reg-status" style="margin-top: 1rem; font-weight: 600;"></div>
+    </div>
+</div>
+
+<div class="chart-container animate-fade" style="margin-top: 2rem;">
+    <h3 style="margin-bottom: 1.5rem; font-weight: 600;"><i class="fas fa-users"></i> Enrolled Members (Students &
+        Faculty)</h3>
+    <table style="width: 100%; border-collapse: collapse;">
+        <thead style="background: #f8fafc;">
+            <tr>
+                <th style="padding: 1rem; text-align: left; color: var(--text-muted);">Roll / ID</th>
+                <th style="padding: 1rem; text-align: left; color: var(--text-muted);">Full Name</th>
+                <th style="padding: 1rem; text-align: left; color: var(--text-muted);">Course</th>
+                <th style="padding: 1rem; text-align: left; color: var(--text-muted);">Role</th>
+                <th style="padding: 1rem; text-align: right; color: var(--text-muted);">Actions</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for student in students %}
+            <tr style="border-top: 1px solid var(--border);">
+                <td style="padding: 1rem; font-weight: 600;">{{ student.roll_number }}</td>
+                <td style="padding: 1rem;">{{ student.name }}</td>
+                <td style="padding: 1rem;">{{ student.course }}</td>
+                <td style="padding: 1rem;">
+                    <span
+                        style="font-size: 0.75rem; padding: 4px 10px; border-radius: 12px; background: {% if student.role == 'Faculty' %}#fef3c7; color: #92400e;{% else %}#dcfce7; color: #166534;{% endif %}">
+                        {{ student.role }}
+                    </span>
+                </td>
+                <td style="padding: 1rem; text-align: right; display: flex; gap: 8px; justify-content: flex-end;">
+                    <button class="btn-edit" onclick="openEditModal({{ student.id }})"
+                        style="background: var(--secondary); color: white; border: none; padding: 6px 12px; border-radius: 8px; cursor: pointer; font-size: 0.8rem;">
+                        <i class="fas fa-edit"></i>
+                    </button>
+                    <button class="btn-delete" onclick="deleteRecord({{ student.id }})"
+                        style="background: #ef4444; color: white; border: none; padding: 6px 12px; border-radius: 8px; cursor: pointer; font-size: 0.8rem;">
+                        <i class="fas fa-trash"></i>
+                    </button>
+                </td>
+            </tr>
+            {% else %}
+            <tr>
+                <td colspan="4" style="padding: 2rem; text-align: center; color: var(--text-muted);">No students
+                    enrolled yet.</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+
+</div>
+
+<!-- EDIT MODAL -->
+<div id="edit-modal"
+    style="display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.5); z-index: 2000; align-items: center; justify-content: center; backdrop-filter: blur(4px);">
+    <div class="stat-card" style="width: 100%; max-width: 500px; padding: 2.5rem; position: relative; margin: 20px;">
+        <button onclick="closeEditModal()"
+            style="position: absolute; top: 1.5rem; right: 1.5rem; background: none; border: none; color: var(--text-muted); cursor: pointer; font-size: 1.25rem;">
+            <i class="fas fa-times"></i>
+        </button>
+
+        <h2 style="margin-bottom: 2rem; font-weight: 700; color: var(--primary);"><i class="fas fa-user-edit"></i> Edit
+            Record</h2>
+
+        <input type="hidden" id="edit-id">
+        <div class="form-group">
+            <label>Full Name</label>
+            <input type="text" id="edit-name" class="form-control">
+        </div>
+        <div class="form-group">
+            <label>Roll Number / ID</label>
+            <input type="text" id="edit-roll" class="form-control">
+        </div>
+        <div class="form-group">
+            <label>Course / Batch</label>
+            <input type="text" id="edit-course" class="form-control">
+        </div>
+        <div class="form-group">
+            <label>Email</label>
+            <input type="email" id="edit-email" class="form-control">
+        </div>
+        <div class="form-group">
+            <label>Category</label>
+            <select id="edit-role" class="form-control">
+                <option value="Student">Student</option>
+                <option value="Faculty">Faculty/Staff</option>
+            </select>
+        </div>
+        <div class="form-group" id="edit-password-group" style="display: none;">
+            <label>Change Login Password</label>
+            <input type="password" id="edit-password" class="form-control" placeholder="Leave blank to keep current">
+        </div>
+
+        <button id="update-btn" class="btn-auth" style="margin-top: 1rem;">
+            <i class="fas fa-check-circle"></i> Update Information
+        </button>
+    </div>
+</div>
+
+<script>
+    document.getElementById('page-title').innerText = "Student Management";
+</script>
+{% endblock %}

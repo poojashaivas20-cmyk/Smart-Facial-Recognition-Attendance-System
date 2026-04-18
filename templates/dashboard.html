@@ -1,0 +1,119 @@
+{% extends "layout.html" %}
+
+{% block content %}
+<!-- ADMIN GREETING OVERLAY -->
+<div id="admin-toast" style="position: fixed; top: 20px; right: 20px; background: var(--primary); color: white; padding: 1.25rem 2rem; border-radius: 15px; box-shadow: 0 10px 15px rgba(0,0,0,0.1); z-index: 1000; display: flex; align-items: center; gap: 15px; transform: translateX(200%); transition: transform 0.5s cubic-bezier(0.175, 0.885, 0.32, 1.275);">
+    <i class="fas fa-shield-alt" style="font-size: 1.5rem;"></i>
+    <div>
+        <p style="font-weight: 700; margin: 0;">Access Granted</p>
+        <p style="font-size: 0.8rem; margin: 0; opacity: 0.9;">Hello, Admin {{ session.get('fullname') }}</p>
+    </div>
+</div>
+
+<div class="stats-grid animate-fade">
+    <div class="stat-card">
+        <div class="stat-icon"><i class="fas fa-users"></i> Total Students</div>
+        <div class="stat-number">{{ total_students }}</div>
+    </div>
+    <div class="stat-card present">
+        <div class="stat-icon" style="color: var(--success);"><i class="fas fa-check-circle"></i> Present Today</div>
+        <div class="stat-number" style="color: var(--success);">{{ attendance_today }}</div>
+    </div>
+    <div class="stat-card absent">
+        <div class="stat-icon" style="color: var(--danger);"><i class="fas fa-times-circle"></i> Absent Today</div>
+        <div class="stat-number" style="color: var(--danger);">{{ absent_today }}</div>
+        <button id="alert-btn" class="btn-auth" style="background: var(--danger); font-size: 0.75rem; padding: 0.5rem 1rem; margin-top: 1rem;">
+            <i class="fas fa-paper-plane"></i> Alert Absentees
+        </button>
+    </div>
+</div>
+
+<div class="chart-container animate-fade" style="animation-delay: 0.1s;">
+    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 2rem;">
+        <h3 style="font-weight: 600;"><i class="fas fa-chart-line"></i> Attendance Trend (Last 7 Days)</h3>
+        <span style="font-size: 0.8rem; color: var(--text-muted);">Daily Attendance Tracking</span>
+    </div>
+    <canvas id="attendanceTrendChart" height="100"></canvas>
+</div>
+
+<div style="margin-top: 3rem;" class="animate-fade" style="animation-delay: 0.2s;">
+    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem;">
+        <h3 style="font-weight: 600;"><i class="fas fa-history"></i> Recent Activity</h3>
+        <a href="/logs" style="color: var(--primary); text-decoration: none; font-size: 0.9rem; font-weight: 600;">View All Report</a>
+    </div>
+
+    <div style="background: white; border-radius: 20px; border: 1px solid var(--border); overflow: hidden;">
+        <table style="width: 100%; border-collapse: collapse;">
+            <thead style="background: #f8fafc;">
+                <tr>
+                    <th style="padding: 1.25rem; text-align: left; color: var(--text-muted); font-weight: 600; font-size: 0.85rem;">Student Name</th>
+                    <th style="padding: 1.25rem; text-align: left; color: var(--text-muted); font-weight: 600; font-size: 0.85rem;">Status</th>
+                    <th style="padding: 1.25rem; text-align: left; color: var(--text-muted); font-weight: 600; font-size: 0.85rem;">Check-in Time</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for log in recent_logs %}
+                <tr style="border-top: 1px solid var(--border);">
+                    <td style="padding: 1.25rem; font-weight: 500;">{{ log.student.name }}</td>
+                    <td style="padding: 1.25rem;">
+                        <span style="background: rgba(16, 185, 129, 0.1); color: var(--success); padding: 5px 12px; border-radius: 20px; font-size: 0.75rem; font-weight: 600;">PRESENT</span>
+                    </td>
+                    <td style="padding: 1.25rem; color: var(--text-muted); font-size: 0.85rem;">{{ log.check_in_time.strftime('%a, %d %b %Y - %I:%M:%S %p') }}</td>
+                </tr>
+                {% else %}
+                <tr>
+                    <td colspan="3" style="padding: 3rem; text-align: center; color: var(--text-muted);">No activity recorded yet for today.</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<script>
+    document.getElementById('page-title').innerText = "Dashboard Overview";
+
+    // Show Admin Toast
+    window.addEventListener('load', () => {
+        const toast = document.getElementById('admin-toast');
+        if (toast) {
+            setTimeout(() => {
+                toast.style.transform = 'translateX(0)';
+                setTimeout(() => {
+                    toast.style.transform = 'translateX(200%)';
+                }, 4000);
+            }, 500);
+        }
+    });
+
+    // Chart.js Configuration
+    const ctx = document.getElementById('attendanceTrendChart').getContext('2d');
+    const chartData = {{ chart_data | tojson }};
+    
+    new Chart(ctx, {
+        type: 'line',
+        data: {
+            labels: chartData.labels,
+            datasets: [{
+                label: 'Present Students',
+                data: chartData.values,
+                borderColor: '#2563eb',
+                backgroundColor: 'rgba(37, 99, 235, 0.1)',
+                fill: true,
+                tension: 0.4,
+                borderWidth: 3,
+                pointRadius: 4,
+                pointBackgroundColor: '#2563eb'
+            }]
+        },
+        options: {
+            responsive: true,
+            plugins: { legend: { display: false } },
+            scales: {
+                y: { beginAtZero: true, grid: { display: false } },
+                x: { grid: { display: false } }
+            }
+        }
+    });
+</script>
+{% endblock %}

@@ -1,0 +1,87 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Attendance System - Professional</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/index.css') }}">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+</head>
+
+<body>
+    {% if request.endpoint in ['login', 'user_registration'] %}
+    <!-- AUTH LAYOUT -->
+    <div class="auth-container">
+        {% block auth_content %}{% endblock %}
+    </div>
+    {% else %}
+    <!-- DASHBOARD LAYOUT -->
+    <div class="dashboard-wrapper">
+        <aside class="sidebar">
+            <div class="sidebar-brand">
+                <i class="fas fa-user-graduate sidebar-logo"></i>
+                <h2 style="font-size: 1.2rem; letter-spacing: 1px;">Attendance System</h2>
+            </div>
+
+            <div style="margin-bottom: 2rem; padding: 0 1rem; opacity: 0.8;">
+                <p style="font-size: 0.8rem; color: var(--text-muted);">Welcome,</p>
+                <p style="font-weight: 600;">{{ session.get('fullname', 'Guest User') }}</p>
+            </div>
+
+            <ul class="nav-menu">
+                <li><a href="/dashboard" class="nav-link {{ 'active' if request.path == '/dashboard' }}"><i
+                            class="fas fa-th-large"></i> Dashboard</a></li>
+                <li><a href="/management" class="nav-link mgmt {{ 'active' if request.path == '/management' }}"><i
+                            class="fas fa-users-cog"></i> Student Management</a></li>
+                <li><a href="/manual_attendance" class="nav-link mark {{ 'active' if request.path == '/manual_attendance' }}"><i
+                            class="fas fa-clipboard-check"></i> Manual Attendance</a></li>
+
+                <li><a href="/logs" class="nav-link report {{ 'active' if request.path == '/logs' }}"><i
+                            class="fas fa-file-alt"></i> Attendance Report</a></li>
+            </ul>
+
+            <a href="/logout" class="btn-auth"
+                style="margin-top: auto; background: var(--danger); text-decoration: none; text-align: center;">
+                <i class="fas fa-sign-out-alt"></i> Logout
+            </a>
+        </aside>
+
+        <main class="main-area">
+            <header class="dashboard-header">
+                <div class="header-info">
+                    <h2 id="page-title">Dashboard</h2>
+                    <p style="opacity: 0.8; font-size: 0.9rem;">{{ current_date }}</p>
+                </div>
+                <div style="display: flex; gap: 2rem; align-items: center;">
+                    <div id="real-time-clock" class="clock-area">--:--:-- --</div>
+                    <a href="/" title="Switch to Student Scanner" style="color: white; font-size: 1.2rem; background: rgba(255,255,255,0.1); width: 40px; height: 40px; display: flex; align-items: center; justify-content: center; border-radius: 10px; transition: all 0.3s;">
+                        <i class="fas fa-camera"></i>
+                    </a>
+                </div>
+            </header>
+
+            <div class="content-padding">
+                {% block content %}{% endblock %}
+            </div>
+        </main>
+    </div>
+    {% endif %}
+
+    <script>
+        function updateClock() {
+            const now = new Date();
+            const timeStr = now.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: true });
+            const clockEl = document.getElementById('real-time-clock');
+            if (clockEl) clockEl.innerText = timeStr;
+        }
+        setInterval(updateClock, 1000);
+        updateClock();
+    </script>
+    <script src="{{ url_for('static', filename='js/main.js') }}"></script>
+</body>
+
+</html>

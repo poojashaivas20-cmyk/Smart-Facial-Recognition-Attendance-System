@@ -1,0 +1,6 @@
+flask
+flask-sqlalchemy
+mysql-connector-python
+opencv-contrib-python
+numpy
+flask-cors
