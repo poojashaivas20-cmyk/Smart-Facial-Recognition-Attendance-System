@@ -34,13 +34,15 @@ class EmailService:
         if not student_email or "@" not in student_email:
             return False
 
-        today_formatted = datetime.now().strftime('%d:%b:%Y')  # e.g. 18:Apr:2026
+        now = datetime.now()
+        date_time = now.strftime('%d-%m-%Y at %I:%M %p')
         subject = f"Absent Notification - {student_name}"
         body = (
             f"Dear Parents,\n\n"
-            f"{student_name} was absent today ({today_formatted}).\n\n"
+            f"{student_name} was absent today. Please ensure to attend classes regularly.\n\n"
+            f"Date & Time: {date_time}\n\n"
             f"Regards,\n"
-            f"SFRAS Attendance System"
+            f"SFRAS"
         )
         
         msg = MIMEText(body)
