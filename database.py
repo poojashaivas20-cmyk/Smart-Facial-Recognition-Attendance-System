@@ -23,7 +23,9 @@ class Student(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     name = db.Column(db.String(100), nullable=False)
     roll_number = db.Column(db.String(50), unique=True, nullable=False)
-    course = db.Column(db.String(100))
+    course = db.Column(db.String(100)) # Used for Course/Semester
+    phone = db.Column(db.String(20))
+    dob = db.Column(db.String(20))
     role = db.Column(db.String(20), default='Student')
     email = db.Column(db.String(120))
     password = db.Column(db.String(255)) 

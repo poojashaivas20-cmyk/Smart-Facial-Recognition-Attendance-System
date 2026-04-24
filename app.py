@@ -227,55 +227,90 @@ def api_mark_manual():
 @app.route('/logs')
 @login_required
 def logs_ui():
+    range_type = request.args.get('range', 'daily')
     selected_date_str = request.args.get('date', datetime.now().strftime('%Y-%m-%d'))
+    
     try:
         selected_date = datetime.strptime(selected_date_str, '%Y-%m-%d').date()
     except:
         selected_date = datetime.now().date()
         selected_date_str = selected_date.strftime('%Y-%m-%d')
 
-    # Use explicit datetime range to avoid any timezone / db.func.date() mismatch
-    day_start = datetime.combine(selected_date, datetime.min.time())
-    day_end   = datetime.combine(selected_date, datetime.max.time())
+    # Determine Start and End Dates based on Range
+    if range_type == 'weekly':
+        # Start of the week (Monday)
+        start_date = selected_date - timedelta(days=selected_date.weekday())
+        end_date = start_date + timedelta(days=6)
+        total_days = 7 # Simplification: use calendar days in the week
+    elif range_type == 'monthly':
+        # Start of the month
+        start_date = selected_date.replace(day=1)
+        # End of the month
+        import calendar
+        _, last_day = calendar.monthrange(selected_date.year, selected_date.month)
+        end_date = selected_date.replace(day=last_day)
+        total_days = last_day
+    else:
+        # Daily
+        start_date = selected_date
+        end_date = selected_date
+        total_days = 1
+
+    day_start = datetime.combine(start_date, datetime.min.time())
+    day_end   = datetime.combine(end_date, datetime.max.time())
 
     all_students = Student.query.all()
-    # Get all attendance strictly within the selected calendar day
     attendance_records = Attendance.query.filter(
         Attendance.check_in_time >= day_start,
         Attendance.check_in_time <= day_end
     ).all()
     
-    # Create a mapping of student_id to attendance records (list, since they can scan every 8 hours)
-    attendance_map = {}
+    # Map student_id -> set of days present (to count unique days)
+    student_attendance_days = {}
+    # Map student_id -> latest scan time (for display)
+    student_latest_scan = {}
+
     for a in attendance_records:
-        if a.student_id not in attendance_map:
-            attendance_map[a.student_id] = []
-        attendance_map[a.student_id].append(a)
+        sid = a.student_id
+        day = a.check_in_time.date()
+        
+        if sid not in student_attendance_days:
+            student_attendance_days[sid] = set()
+        student_attendance_days[sid].add(day)
+        
+        if sid not in student_latest_scan or a.check_in_time > student_latest_scan[sid]:
+            student_latest_scan[sid] = a.check_in_time
     
     report = []
     present_count = 0
     for student in all_students:
-        atds = attendance_map.get(student.id, [])
-        status = "PRESENT" if atds else "ABSENT"
-        if atds: present_count += 1
+        days_present = len(student_attendance_days.get(student.id, []))
+        is_present_today = 1 if days_present > 0 else 0
+        if is_present_today: present_count += 1
         
-        # We show the latest scan time for the report entry
-        last_scan = atds[-1].check_in_time.strftime('%a, %d %b %Y - %I:%M:%S %p') if atds else '--:--:--'
+        percentage = (days_present / total_days) * 100
+        
+        last_scan = student_latest_scan.get(student.id)
+        last_scan_str = last_scan.strftime('%a, %d %b %Y - %I:%M:%S %p') if last_scan else '--:--:--'
         
         report.append({
             'roll': student.roll_number,
             'name': student.name,
             'course': student.course,
-            'status': status,
-            'time': last_scan
+            'status': "PRESENT" if days_present > 0 else "ABSENT",
+            'time': last_scan_str,
+            'days_present': days_present,
+            'percentage': round(percentage, 1)
         })
     
     return render_template('logs.html', 
                            report=report, 
                            selected_date=selected_date_str,
+                           range_type=range_type,
                            total=len(all_students),
                            present=present_count,
-                           absent=len(all_students) - present_count)
+                           absent=len(all_students) - present_count,
+                           total_days=total_days)
 
 # --- MANAGEMENT API ---
 @app.route('/api/student/<int:sid>')
@@ -287,6 +322,8 @@ def get_student(sid):
         'name': student.name,
         'roll': student.roll_number,
         'course': student.course,
+        'phone': student.phone,
+        'dob': student.dob,
         'email': student.email,
         'role': student.role
     })
@@ -299,6 +336,8 @@ def update_student(sid):
     student.name = data.get('name')
     student.roll_number = data.get('roll')
     student.course = data.get('course')
+    student.phone = data.get('phone')
+    student.dob = data.get('dob')
     student.email = data.get('email')
     student.role = data.get('role')
     
@@ -344,7 +383,8 @@ def register_student():
         return jsonify({'success': False, 'message': error_msg})
 
     new_student = Student(name=data.get('name'), roll_number=data.get('roll'), 
-                          course=data.get('course'), role=data.get('role'), email=data.get('email'))
+                          course=data.get('course'), phone=data.get('phone'),
+                          dob=data.get('dob'), role=data.get('role'), email=data.get('email'))
     
     # If Faculty, store hashed password
     if data.get('role') == 'Faculty' and data.get('password'):
@@ -363,9 +403,9 @@ def mark_attendance():
     nparr = np.frombuffer(img_bytes, np.uint8)
     frame = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
     
-    # Updated to handle liveness result
     recognition_results = fh.recognize_face(frame)
     marked = []
+    already_marked = []
     
     for sid, is_live, msg in recognition_results:
         if not is_live:
@@ -378,13 +418,16 @@ def mark_attendance():
             Attendance.check_in_time > eight_hours_ago
         ).first()
 
+        student = Student.query.get(sid)
         if not existing:
             log = Attendance(student_id=sid)
             db.session.add(log)
-            marked.append(Student.query.get(sid).name)
+            marked.append(student.name)
+        else:
+            already_marked.append(student.name)
             
     db.session.commit()
-    return jsonify({'success': True, 'marked': marked})
+    return jsonify({'success': True, 'marked': marked, 'already_marked': already_marked})
 
 if __name__ == '__main__':
     with app.app_context():

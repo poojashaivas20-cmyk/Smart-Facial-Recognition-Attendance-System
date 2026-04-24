@@ -21,8 +21,18 @@
             <input type="text" id="reg-roll" class="form-control" placeholder="e.g. 2023-CS-101 or EMP-001">
         </div>
         <div class="form-group">
-            <label>Course/Batch</label>
-            <input type="text" id="reg-course" class="form-control" placeholder="e.g. BCA III Year">
+            <label>Course / Semester</label>
+            <input type="text" id="reg-course" class="form-control" placeholder="e.g. BCA - VI Sem">
+        </div>
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem;">
+            <div class="form-group">
+                <label>Phone Number</label>
+                <input type="text" id="reg-phone" class="form-control" placeholder="10-digit number">
+            </div>
+            <div class="form-group">
+                <label>Date of Birth</label>
+                <input type="date" id="reg-dob" class="form-control">
+            </div>
         </div>
         <div class="form-group">
             <label>Email Address</label>
@@ -84,7 +94,8 @@
             <tr>
                 <th style="padding: 1rem; text-align: left; color: var(--text-muted);">Roll / ID</th>
                 <th style="padding: 1rem; text-align: left; color: var(--text-muted);">Full Name</th>
-                <th style="padding: 1rem; text-align: left; color: var(--text-muted);">Course</th>
+                <th style="padding: 1rem; text-align: left; color: var(--text-muted);">Course/Sem</th>
+                <th style="padding: 1rem; text-align: left; color: var(--text-muted);">Phone</th>
                 <th style="padding: 1rem; text-align: left; color: var(--text-muted);">Role</th>
                 <th style="padding: 1rem; text-align: right; color: var(--text-muted);">Actions</th>
             </tr>
@@ -95,6 +106,7 @@
                 <td style="padding: 1rem; font-weight: 600;">{{ student.roll_number }}</td>
                 <td style="padding: 1rem;">{{ student.name }}</td>
                 <td style="padding: 1rem;">{{ student.course }}</td>
+                <td style="padding: 1rem; color: var(--text-muted); font-size: 0.85rem;">{{ student.phone or '-' }}</td>
                 <td style="padding: 1rem;">
                     <span
                         style="font-size: 0.75rem; padding: 4px 10px; border-radius: 12px; background: {% if student.role == 'Faculty' %}#fef3c7; color: #92400e;{% else %}#dcfce7; color: #166534;{% endif %}">
@@ -146,8 +158,18 @@
             <input type="text" id="edit-roll" class="form-control">
         </div>
         <div class="form-group">
-            <label>Course / Batch</label>
+            <label>Course / Semester</label>
             <input type="text" id="edit-course" class="form-control">
+        </div>
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem;">
+            <div class="form-group">
+                <label>Phone Number</label>
+                <input type="text" id="edit-phone" class="form-control">
+            </div>
+            <div class="form-group">
+                <label>Date of Birth</label>
+                <input type="date" id="edit-dob" class="form-control">
+            </div>
         </div>
         <div class="form-group">
             <label>Email</label>

@@ -3,12 +3,23 @@
 {% block content %}
 <div class="header animate-fade" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 2rem;">
     <div>
-        <h1 style="color: var(--primary);">Daily Attendance Report</h1>
-        <p style="color: var(--text-muted);">View present and absent records for a specific day.</p>
+        <h1 style="color: var(--primary); text-transform: capitalize;">{{ range_type }} Attendance Report</h1>
+        <p style="color: var(--text-muted);">
+            {% if range_type == 'daily' %}
+                View present and absent records for a specific day.
+            {% else %}
+                View aggregate attendance and percentages for the selected {{ range_type }} period.
+            {% endif %}
+        </p>
     </div>
     <div style="display: flex; gap: 1rem; align-items: center;">
-        <form action="/logs" method="GET" style="display: flex; gap: 0.5rem; align-items: center; background: white; padding: 5px 15px; border-radius: 12px; border: 1px solid var(--border);">
-            <label style="font-size: 0.8rem; font-weight: 700; color: var(--text-muted);">SELECT DATE:</label>
+        <form action="/logs" method="GET" id="report-filters" style="display: flex; gap: 0.5rem; align-items: center; background: white; padding: 5px 15px; border-radius: 12px; border: 1px solid var(--border);">
+            <select name="range" onchange="this.form.submit()" style="border: none; outline: none; font-weight: 700; color: var(--primary); background: transparent; cursor: pointer; padding-right: 10px; border-right: 1px solid var(--border); margin-right: 10px;">
+                <option value="daily" {% if range_type == 'daily' %}selected{% endif %}>Daily</option>
+                <option value="weekly" {% if range_type == 'weekly' %}selected{% endif %}>Weekly</option>
+                <option value="monthly" {% if range_type == 'monthly' %}selected{% endif %}>Monthly</option>
+            </select>
+            <label style="font-size: 0.7rem; font-weight: 800; color: var(--text-muted); text-transform: uppercase;">Reference Date:</label>
             <input type="date" name="date" value="{{ selected_date }}" onchange="this.form.submit()" style="border: none; outline: none; font-weight: 600; color: var(--primary);">
         </form>
         <button class="btn-auth" style="width: auto; padding: 0.8rem 1.5rem; background: var(--secondary);" onclick="window.print()">
@@ -40,7 +51,10 @@
                 <th style="padding: 1.25rem; text-align: left; color: var(--text-muted); font-weight: 600; font-size: 0.85rem;">Roll Number</th>
                 <th style="padding: 1.25rem; text-align: left; color: var(--text-muted); font-weight: 600; font-size: 0.85rem;">Student Name</th>
                 <th style="padding: 1.25rem; text-align: left; color: var(--text-muted); font-weight: 600; font-size: 0.85rem;">Course</th>
-                <th style="padding: 1.25rem; text-align: left; color: var(--text-muted); font-weight: 600; font-size: 0.85rem;">Scan Date & Time</th>
+                <th style="padding: 1.25rem; text-align: left; color: var(--text-muted); font-weight: 600; font-size: 0.85rem;">
+                    {% if range_type == 'daily' %}Scan Time{% else %}Days Present{% endif %}
+                </th>
+                <th style="padding: 1.25rem; text-align: center; color: var(--text-muted); font-weight: 600; font-size: 0.85rem;">Attendance %</th>
                 <th style="padding: 1.25rem; text-align: left; color: var(--text-muted); font-weight: 600; font-size: 0.85rem;">Status</th>
             </tr>
         </thead>
@@ -51,7 +65,17 @@
                 <td style="padding: 1.25rem; font-weight: 500;">{{ entry.name }}</td>
                 <td style="padding: 1.25rem; color: var(--text-muted); font-size: 0.9rem;">{{ entry.course }}</td>
                 <td style="padding: 1.25rem; font-weight: 600; font-size: 0.9rem; color: {{ 'var(--success)' if entry.status == 'PRESENT' else 'var(--text-muted)' }};">
-                    {{ entry.time }}
+                    {% if range_type == 'daily' %}
+                        {{ entry.time.split(' - ')[1] if ' - ' in entry.time else entry.time }}
+                    {% else %}
+                        <span style="font-size: 1.1rem;">{{ entry.days_present }}</span> / {{ total_days }} Days
+                    {% endif %}
+                </td>
+                <td style="padding: 1.25rem; text-align: center;">
+                    <div style="background: #f1f5f9; height: 8px; width: 100px; border-radius: 10px; display: inline-block; margin-right: 10px; vertical-align: middle; overflow: hidden;">
+                        <div style="background: {% if entry.percentage >= 75 %}var(--success){% elif entry.percentage >= 50 %}var(--warning){% else %}var(--danger){% endif %}; height: 100%; width: {{ entry.percentage }}%;"></div>
+                    </div>
+                    <span style="font-weight: 700; font-size: 0.85rem;">{{ entry.percentage }}%</span>
                 </td>
                 <td style="padding: 1.25rem;">
                     {% if entry.status == 'PRESENT' %}

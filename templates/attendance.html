@@ -25,6 +25,16 @@
     <div class="kiosk-container">
         <div id="cam-wrapper" class="kiosk-video-wrapper">
             <video id="video" autoplay muted class="kiosk-video"></video>
+            <!-- ADMIN CONTROLS (Moved to top corners) -->
+            <div class="kiosk-controls-overlay">
+                <button id="start-btn" class="kiosk-btn-mini start" onclick="startSystem()">
+                    <i class="fas fa-play"></i> START
+                </button>
+                <button id="stop-btn" class="kiosk-btn-mini stop" onclick="stopSystem()" disabled>
+                    <i class="fas fa-stop"></i> STOP
+                </button>
+            </div>
+
             <div class="kiosk-overlay">
                 <div class="kiosk-scanner-line" id="scan-line"></div>
                 <div style="text-align: center; margin-top: auto; padding-bottom: 2rem;">
@@ -38,12 +48,37 @@
 
         <div class="kiosk-status-panel">
             <div id="status-container">
-                <div class="kiosk-message" style="opacity: 0.5;">READY TO SCAN</div>
-                <div class="kiosk-sub-message">Position your face within the frame</div>
+                <div class="kiosk-message" style="opacity: 0.5;">SCANNER IDLE</div>
+                <div class="kiosk-sub-message">Click Start to begin attendance</div>
             </div>
         </div>
     </div>
 </div>
+
+<style>
+    .kiosk-btn-mini {
+        position: absolute;
+        top: 20px;
+        padding: 10px 20px;
+        border-radius: 8px;
+        border: none;
+        font-weight: 800;
+        cursor: pointer;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        transition: all 0.3s ease;
+        font-family: inherit;
+        font-size: 0.8rem;
+        z-index: 100;
+        backdrop-filter: blur(10px);
+    }
+    .kiosk-btn-mini.start { left: 20px; background: rgba(37, 99, 235, 0.8); color: white; border: 1px solid rgba(255,255,255,0.2); }
+    .kiosk-btn-mini.stop { right: 20px; background: rgba(30, 41, 59, 0.8); color: #94a3b8; border: 1px solid rgba(255,255,255,0.1); }
+    .kiosk-btn-mini:disabled { opacity: 0; pointer-events: none; transform: translateY(-10px); }
+    .kiosk-btn-mini.start:not(:disabled):hover { background: var(--primary); transform: scale(1.05); }
+    .kiosk-btn-mini.stop:not(:disabled):hover { background: var(--danger); color: white; transform: scale(1.05); }
+</style>
 
 <!-- SUCCESS BEEP -->
 <audio id="success-sound" src="https://assets.mixkit.co/active_storage/sfx/2869/2869-preview.mp3"></audio>
@@ -64,17 +99,56 @@
     const successSound = document.getElementById('success-sound');
     
     let isProcessing = false;
+    let scanInterval = null;
+    let stream = null;
 
-    // 1. Initialize Webcam
-    async function startCamera() {
+    // 1. Manage System State
+    async function startSystem() {
         try {
-            const stream = await navigator.mediaDevices.getUserMedia({ video: { width: 1280, height: 720 } });
+            stream = await navigator.mediaDevices.getUserMedia({ video: { width: 1280, height: 720 } });
             video.srcObject = stream;
+            
+            document.getElementById('start-btn').disabled = true;
+            document.getElementById('stop-btn').disabled = false;
+            
+            statusContainer.innerHTML = `
+                <div class="kiosk-message" style="color: var(--primary)">SCANNER ACTIVE</div>
+                <div class="kiosk-sub-message">Position your face within the frame</div>
+            `;
+            
+            // Start scanning loop
+            scanInterval = setInterval(() => {
+                if (!isProcessing) processFrame();
+            }, 800);
+            
+            camWrapper.classList.remove('error');
         } catch (err) {
             console.error("Camera Error:", err);
             statusContainer.innerHTML = `<div class="kiosk-message" style="color: var(--danger)">CAMERA ERROR</div>
                                         <div class="kiosk-sub-message">Please check your camera permissions</div>`;
         }
+    }
+
+    function stopSystem() {
+        if (stream) {
+            stream.getTracks().forEach(track => track.stop());
+            video.srcObject = null;
+        }
+        
+        if (scanInterval) {
+            clearInterval(scanInterval);
+            scanInterval = null;
+        }
+        
+        document.getElementById('start-btn').disabled = false;
+        document.getElementById('stop-btn').disabled = true;
+        
+        statusContainer.innerHTML = `
+            <div class="kiosk-message" style="opacity: 0.5;">SCANNER IDLE</div>
+            <div class="kiosk-sub-message">Click Start to begin attendance</div>
+        `;
+        
+        camWrapper.classList.remove('success', 'error');
     }
 
     // 2. Capture and Recognize (Continuous Loop)
@@ -101,6 +175,8 @@
 
             if (result.success && result.marked && result.marked.length > 0) {
                 showSuccess(result.marked[0]);
+            } else if (result.success && result.already_marked && result.already_marked.length > 0) {
+                showAlreadyMarked(result.already_marked[0]);
             } else if (result.success === false && (result.message.includes('PROXY') || result.message.includes('Detected') || result.message.includes('Clarity'))) {
                 showProxyWarning(result.message);
             } else {
@@ -131,10 +207,48 @@
         // Wait for 2.5 seconds then reset for next student
         setTimeout(() => {
             camWrapper.classList.remove('success');
-            statusContainer.innerHTML = `
-                <div class="kiosk-message" style="opacity: 0.5;">READY TO SCAN</div>
-                <div class="kiosk-sub-message">Position your face within the frame</div>
-            `;
+            if (scanInterval) {
+                statusContainer.innerHTML = `
+                    <div class="kiosk-message" style="color: var(--primary)">SCANNER ACTIVE</div>
+                    <div class="kiosk-sub-message">Position your face within the frame</div>
+                `;
+            } else {
+                statusContainer.innerHTML = `
+                    <div class="kiosk-message" style="opacity: 0.5;">SCANNER IDLE</div>
+                    <div class="kiosk-sub-message">Click Start to begin attendance</div>
+                `;
+            }
+            isProcessing = false;
+        }, 2500);
+    }
+
+    function showAlreadyMarked(name) {
+        // Warning/Info State
+        camWrapper.classList.add('info');
+        
+        statusContainer.innerHTML = `
+            <div class="kiosk-success-card" style="background: #fbbf24; color: #78350f;">
+                <i class="fas fa-exclamation-circle" style="font-size: 2rem;"></i>
+                <div style="text-align: left;">
+                    <div style="font-size: 1.5rem; font-weight: 800;">${name}</div>
+                    <div style="font-size: 0.8rem; text-transform: uppercase; font-weight: 700; opacity: 0.8;">Already Recorded</div>
+                </div>
+            </div>
+        `;
+
+        setTimeout(() => {
+            camWrapper.classList.remove('info');
+            if (scanInterval) {
+                statusContainer.innerHTML = `
+                    <div class="kiosk-message" style="color: var(--primary)">SCANNER ACTIVE</div>
+                    <div class="kiosk-sub-message">Position your face within the frame</div>
+                `;
+            } else {
+                statusContainer.innerHTML = `
+                    <div class="kiosk-message" style="opacity: 0.5;">SCANNER IDLE</div>
+                    <div class="kiosk-sub-message">Click Start to begin attendance</div>
+                `;
+            }
             isProcessing = false;
         }, 2500);
     }
@@ -155,29 +269,28 @@
 
         setTimeout(() => {
             camWrapper.classList.remove('error');
-            statusContainer.innerHTML = `
-                <div class="kiosk-message" style="opacity: 0.5;">READY TO SCAN</div>
-                <div class="kiosk-sub-message">Position your face within the frame</div>
-            `;
+            if (scanInterval) {
+                statusContainer.innerHTML = `
+                    <div class="kiosk-message" style="color: var(--primary)">SCANNER ACTIVE</div>
+                    <div class="kiosk-sub-message">Position your face within the frame</div>
+                `;
+            } else {
+                statusContainer.innerHTML = `
+                    <div class="kiosk-message" style="opacity: 0.5;">SCANNER IDLE</div>
+                    <div class="kiosk-sub-message">Click Start to begin attendance</div>
+                `;
+            }
             isProcessing = false;
         }, 3000);
     }
 
-    // 3. Keep Clock Updated
+    // Keep Clock Updated
     setInterval(() => {
         const now = new Date();
         document.getElementById('kiosk-clock').innerText = now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
     }, 1000);
 
-    // Initial Start
-    startCamera();
-    
-    // Scan every 800ms when ready
-    setInterval(() => {
-        if (!isProcessing) processFrame();
-    }, 800);
-
-    // Hide Page Title (handled by script in layout usually)
-    document.getElementById('page-title').innerText = "Kiosk View";
+    // Hide Page Title
+    document.getElementById('page-title').innerText = "Attendance Kiosk";
 </script>
 {% endblock %}

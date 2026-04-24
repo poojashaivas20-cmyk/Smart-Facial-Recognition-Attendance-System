@@ -32,21 +32,21 @@ class FaceHandler:
         roi_norm = clahe.apply(roi_gray)
         
         # 1. Laplacian Variance Check
-        # Lowered floor from 70 -> 40 to accommodate grainy laptop cam sensors at night.
+        # Lowered floor from 35 -> 25 to accommodate grainy laptop cam sensors at night.
         # Increased ceiling from 800 -> 1200 to prevent false pattern triggers by ISO noise.
         variance = cv2.Laplacian(roi_gray, cv2.CV_64F).var()
         
-        if variance < 35: 
+        if variance < 25: 
             return False, "Low Clarity: Please turn on a light or clean your camera lens."
         
-        if variance > 1200: 
+        if variance > 1500: 
             return False, "Digital Noise Detected: Too dark for reliable scanning."
         
         # 2. Eye Detection on Normalized ROI
-        # Reduced minNeighbors from 10 -> 4 for better detection in low contrast.
-        eyes = self.eye_cascade.detectMultiScale(roi_norm, scaleFactor=1.1, minNeighbors=4)
+        # Reduced minNeighbors from 4 -> 3 for better detection in low contrast/shadows.
+        eyes = self.eye_cascade.detectMultiScale(roi_norm, scaleFactor=1.1, minNeighbors=3)
         if len(eyes) < 1: 
-            return False, "Organic Features Not Detected: Please look directly at the camera."
+            return False, "Eyes Not Detected: Please look directly at the camera."
             
         return True, "Liveness Success"
 
@@ -100,7 +100,11 @@ class FaceHandler:
             
             id_, confidence = self.recognizer.predict(face_img)
             
-            if confidence < 80:
+            # In LBPH, lower confidence scores mean the match is BETTER (distance is smaller).
+            # Threshold 55.0 is much stricter than 80.0, reducing false positives.
+            if confidence < 55.0:
                 results.append((id_, is_live, msg))
+            else:
+                print(f"INFO: Detected ID {id_} but confidence {confidence:.2f} was too high (Uncertain)")
                     
         return results

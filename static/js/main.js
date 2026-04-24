@@ -48,6 +48,8 @@ document.addEventListener('DOMContentLoaded', () => {
             const name = document.getElementById('reg-name').value;
             const roll = document.getElementById('reg-roll').value;
             const course = document.getElementById('reg-course').value;
+            const phone = document.getElementById('reg-phone').value;
+            const dob = document.getElementById('reg-dob').value;
             const email = document.getElementById('reg-email').value;
             const role = document.getElementById('reg-role').value;
             const password = document.getElementById('reg-password').value;
@@ -76,7 +78,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 const response = await fetch('/register', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ name, roll, course, email, role, password, image: imageData })
+                    body: JSON.stringify({ name, roll, course, phone, dob, email, role, password, image: imageData })
                 });
                 const result = await response.json();
 
@@ -192,6 +194,8 @@ document.addEventListener('DOMContentLoaded', () => {
             document.getElementById('edit-name').value = data.name;
             document.getElementById('edit-roll').value = data.roll;
             document.getElementById('edit-course').value = data.course;
+            document.getElementById('edit-phone').value = data.phone || '';
+            document.getElementById('edit-dob').value = data.dob || '';
             document.getElementById('edit-email').value = data.email || '';
             document.getElementById('edit-role').value = data.role;
             document.getElementById('edit-password').value = '';
@@ -224,6 +228,8 @@ document.addEventListener('DOMContentLoaded', () => {
                 name: document.getElementById('edit-name').value,
                 roll: document.getElementById('edit-roll').value,
                 course: document.getElementById('edit-course').value,
+                phone: document.getElementById('edit-phone').value,
+                dob: document.getElementById('edit-dob').value,
                 email: document.getElementById('edit-email').value,
                 role: document.getElementById('edit-role').value,
                 password: document.getElementById('edit-password').value

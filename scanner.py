@@ -29,7 +29,26 @@ CAM_W, CAM_H = 1280, 720
 HEADER_H = 100
 CANVAS_W, CANVAS_H = CAM_W, CAM_H + HEADER_H
 
-def setup_canvas(frame, status="SCANNING", match_info=None):
+# GLOBAL STATE
+IS_SCANNING = False
+
+# BUTTON REGIONS (x1, y1, x2, y2)
+BTN_START = (50, 25, 250, 75)
+BTN_STOP = (CANVAS_W - 250, 25, CANVAS_W - 50, 75)
+
+def mouse_callback(event, x, y, flags, param):
+    global IS_SCANNING
+    if event == cv2.EVENT_LBUTTONDOWN:
+        # Check START button
+        if BTN_START[0] <= x <= BTN_START[2] and BTN_START[1] <= y <= BTN_START[3]:
+            IS_SCANNING = True
+            print("INFO: Scanner Started by Admin")
+        # Check STOP button
+        elif BTN_STOP[0] <= x <= BTN_STOP[2] and BTN_STOP[1] <= y <= BTN_STOP[3]:
+            IS_SCANNING = False
+            print("INFO: Scanner Stopped by Admin")
+
+def setup_canvas(frame, status="SCANNING", match_info=None, error_msg=None):
     # Create the base canvas (Dark background)
     canvas = np.zeros((CANVAS_H, CANVAS_W, 3), dtype=np.uint8)
     canvas[:] = (30, 30, 30) # Dark gray background
@@ -53,6 +72,29 @@ def setup_canvas(frame, status="SCANNING", match_info=None):
     # (Ensure frame is CAM_W x CAM_H before placement)
     frame_resized = cv2.resize(frame, (CAM_W, CAM_H))
     canvas[HEADER_H:CANVAS_H, 0:CAM_W] = frame_resized
+
+    # 4. DRAW ERROR/STATUS MESSAGE IF ANY
+    if error_msg and status == "SCANNING":
+        # Draw a semi-transparent overlay at the bottom of the camera area
+        msg_y = CANVAS_H - 60
+        cv2.rectangle(canvas, (10, msg_y - 40), (CANVAS_W - 10, msg_y + 20), (0, 0, 0), -1)
+        
+        font_scale = 0.8
+        thickness = 2
+        text_size = cv2.getTextSize(error_msg, cv2.FONT_HERSHEY_SIMPLEX, font_scale, thickness)[0]
+        text_x = (CANVAS_W - text_size[0]) // 2
+        cv2.putText(canvas, error_msg, (text_x, msg_y), cv2.FONT_HERSHEY_SIMPLEX, font_scale, (100, 100, 255), thickness, cv2.LINE_AA)
+
+    # 5. DRAW CONTROL BUTTONS IN HEADER
+    # Start Button
+    start_color = COLOR_SUCCESS if IS_SCANNING else (150, 150, 150)
+    cv2.rectangle(canvas, (BTN_START[0], BTN_START[1]), (BTN_START[2], BTN_START[3]), start_color, -1 if IS_SCANNING else 2)
+    cv2.putText(canvas, "START", (BTN_START[0] + 45, BTN_START[1] + 35), cv2.FONT_HERSHEY_SIMPLEX, 0.8, COLOR_WHITE, 2)
+    
+    # Stop Button
+    stop_color = COLOR_DANGER if not IS_SCANNING else (150, 150, 150)
+    cv2.rectangle(canvas, (BTN_STOP[0], BTN_STOP[1]), (BTN_STOP[2], BTN_STOP[3]), stop_color, -1 if not IS_SCANNING else 2)
+    cv2.putText(canvas, "STOP", (BTN_STOP[0] + 55, BTN_STOP[1] + 35), cv2.FONT_HERSHEY_SIMPLEX, 0.8, COLOR_WHITE, 2)
 
     return canvas
 
@@ -122,6 +164,14 @@ def run_scanner():
     cap.set(cv2.CAP_PROP_FRAME_WIDTH, CAM_W)
     cap.set(cv2.CAP_PROP_FRAME_HEIGHT, CAM_H)
 
+    # Initialize Window and Mouse Callback
+    cv2.namedWindow('Smart Attendance System', cv2.WINDOW_AUTOSIZE)
+    cv2.setMouseCallback('Smart Attendance System', mouse_callback)
+    try:
+        cv2.setWindowProperty('Smart Attendance System', cv2.WND_PROP_TOPMOST, 1)
+    except:
+        pass
+
     cooldown = {} 
     match_display_timer = 0
     match_display_name = ""
@@ -137,72 +187,91 @@ def run_scanner():
             break
 
         frame = cv2.flip(frame, 1) # Mirror view
+        
+        # --- FIX: CAPTURE CLEAN FRAME FOR PROCESSING ---
+        # Capture the frame BEFORE drawing HUD elements on it.
+        # This ensures the recognizer doesn't see pulsing lines or brackets.
+        process_frame = frame.copy()
+        
         status = "SCANNING" if match_display_timer < time.time() else "MATCHED"
+        current_error = None
         
         # 1. DRAW SCANNER HUD (Inside camera frame)
         zx, zy, zw, zh = draw_scanner_hud(frame, status, match_display_name if status == "MATCHED" else None)
         
         # 2. ENCAPSULATE FRAME IN PROFESSIONAL CANVAS (Header + Border)
+        # Note: we pass 'frame' (with HUD) for display, but use 'process_frame' for logic below
         canvas = setup_canvas(frame, status)
         
-        if status == "SCANNING":
-            gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+        if status == "SCANNING" and IS_SCANNING:
+            gray = cv2.cvtColor(process_frame, cv2.COLOR_BGR2GRAY)
             faces = fh.face_cascade.detectMultiScale(gray, 1.3, 5)
+        elif not IS_SCANNING:
+            current_error = "Scanner Paused: Click START to begin"
+            canvas = setup_canvas(frame, status, error_msg=current_error)
+            
+        if status == "SCANNING" and IS_SCANNING:
 
-            for (x, y, w, h) in faces:
-                # Recognition logic only if face is in centered zone
-                if x > zx and x + w < zx + zw and y > zy and y + h < zy + zh:
-                    is_live, msg = fh.is_liveness_valid(frame, x, y, w, h)
-                    if not is_live: continue
+            if len(faces) == 0:
+                current_error = "No Face Detected"
+            else:
+                for (x, y, w, h) in faces:
+                    # Recognition logic only if face is in centered zone
+                    if x > zx and x + w < zx + zw and y > zy and y + h < zy + zh:
+                        is_live, msg = fh.is_liveness_valid(process_frame, x, y, w, h)
+                        if not is_live: 
+                            current_error = msg
+                            continue
 
-                    # Recognize
-                    try:
-                        face_img = gray[y:y+h, x:x+w]
-                        face_img = cv2.resize(face_img, (200, 200))
-                        sid, conf = fh.recognizer.predict(face_img)
-                        print(f"Face Detected - ID: {sid}, Conf: {conf:.2f}")
+                        # Recognize
+                        try:
+                            face_img = gray[y:y+h, x:x+w]
+                            face_img = cv2.resize(face_img, (200, 200))
+                            sid, conf = fh.recognizer.predict(face_img)
+                            print(f"Face Candidate - ID: {sid}, Confidence Score: {conf:.2f} (Target < 55.0)")
 
-                        if conf < 75:
-                            with scanner_app.app_context():
-                                student = Student.query.get(sid)
-                                if student:
-                                    print(f"Match Confirmed: {student.name}")
-                                    now = time.time()
-                                    if sid not in cooldown or (now - cooldown[sid] > 10):
-                                        # Mark DB
-                                        try:
-                                            today = datetime.utcnow().date()
-                                            existing = Attendance.query.filter(
-                                                Attendance.student_id == sid, 
-                                                db.func.date(Attendance.check_in_time) == today
-                                            ).first()
-                                            
-                                            if not existing:
-                                                new_log = Attendance(student_id=sid)
-                                                db.session.add(new_log)
-                                                db.session.commit()
-                                                print(f"SUCCESS: Attendance logged for {student.name}")
-                                            else:
-                                                print(f"INFO: {student.name} already marked for today.")
+                            if conf < 55.0:
+                                with scanner_app.app_context():
+                                    student = Student.query.get(sid)
+                                    if student:
+                                        print(f"Match Confirmed: {student.name}")
+                                        now = time.time()
+                                        if sid not in cooldown or (now - cooldown[sid] > 10):
+                                            # Mark DB
+                                            try:
+                                                today = datetime.utcnow().date()
+                                                existing = Attendance.query.filter(
+                                                    Attendance.student_id == sid, 
+                                                    db.func.date(Attendance.check_in_time) == today
+                                                ).first()
                                                 
-                                            cooldown[sid] = now
-                                            match_display_name = student.name
-                                            match_display_timer = time.time() + 3
-                                        except Exception as db_err:
-                                            print(f"DATABASE ERROR: {db_err}")
-                    except Exception as rec_err:
-                        print(f"RECOGNITION ERROR: {rec_err}")
+                                                if not existing:
+                                                    new_log = Attendance(student_id=sid)
+                                                    db.session.add(new_log)
+                                                    db.session.commit()
+                                                    print(f"SUCCESS: Attendance logged for {student.name}")
+                                                    match_display_name = student.name
+                                                else:
+                                                    print(f"INFO: {student.name} already marked for today.")
+                                                    match_display_name = "ALREADY MARKED"
+                                                    
+                                                cooldown[sid] = now
+                                                match_display_timer = time.time() + 3
+                                            except Exception as db_err:
+                                                print(f"DATABASE ERROR: {db_err}")
+                            else:
+                                current_error = "Recognition Uncertain"
+                    else:
+                        current_error = "Align Face Inside Brackets"
+
+        # Update canvas with error message if any
+        if current_error:
+            canvas = setup_canvas(frame, status, error_msg=current_error)
 
         if frame_count % 60 == 0:
             print("Processing camera frames... (Window should be visible)")
         frame_count += 1
 
-        cv2.namedWindow('Smart Attendance System', cv2.WINDOW_AUTOSIZE)
-        try:
-            cv2.setWindowProperty('Smart Attendance System', cv2.WND_PROP_TOPMOST, 1)
-        except:
-            pass
-            
         cv2.imshow('Smart Attendance System', canvas)
         
         # Check for 'q' key or if the window was closed via the 'X' button
